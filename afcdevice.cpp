@@ -106,6 +106,86 @@ UDSEntry AfcDevice::getRootUDSEntry()
     return udsentry;
 }
 
+bool AfcDevice::checkError( afc_error_t error, const QString& path )
+{
+    bool ret = false;
+    QString errorMessage = path;
+    int err_id;
+
+    switch ( error )
+    {
+    case AFC_E_SUCCESS:
+    case AFC_E_END_OF_DATA:
+        ret = true;
+        break;
+    case AFC_E_READ_ERROR:
+        err_id = ERR_COULD_NOT_READ;
+        break;
+    case AFC_E_WRITE_ERROR:
+        err_id = ERR_COULD_NOT_WRITE;
+        break;
+        //  case AFC_E_INVALID_ARG:
+        //        break;
+    case AFC_E_OBJECT_NOT_FOUND:
+        err_id = ERR_DOES_NOT_EXIST;
+        break;
+    case AFC_E_OBJECT_IS_DIR:
+        err_id = ERR_IS_DIRECTORY;
+        break;
+    case AFC_E_DIR_NOT_EMPTY:
+        err_id = ERR_COULD_NOT_RMDIR;
+        break;
+    case AFC_E_PERM_DENIED:
+        err_id = ERR_ACCESS_DENIED;
+        break;
+    case AFC_E_SERVICE_NOT_CONNECTED:
+        err_id = ERR_CONNECTION_BROKEN;
+        break;
+    case AFC_E_OP_TIMEOUT:
+        err_id = ERR_SERVER_TIMEOUT;
+        break;
+    case AFC_E_TOO_MUCH_DATA:
+        //TODO
+        break;
+    case AFC_E_NOT_ENOUGH_DATA:
+        //TODO
+        break;
+    case AFC_E_OBJECT_EXISTS:
+        err_id = ERR_FILE_ALREADY_EXIST;
+        break;
+    case AFC_E_NO_SPACE_LEFT:
+        err_id = ERR_DISK_FULL;
+        break;
+    case AFC_E_NO_RESOURCES:
+        err_id = ERR_OUT_OF_MEMORY;
+        break;
+    case AFC_E_IO_ERROR:
+        err_id = ERR_CONNECTION_BROKEN;
+        break;
+    case AFC_E_OBJECT_BUSY:
+    case AFC_E_OP_NOT_SUPPORTED:
+    case AFC_E_OP_INTERRUPTED:
+    case AFC_E_OP_IN_PROGRESS:
+    case AFC_E_OP_WOULD_BLOCK:
+    case AFC_E_INTERNAL_ERROR:
+    case AFC_E_MUX_ERROR :
+    case AFC_E_UNKNOWN_PACKET_TYPE:
+    case AFC_E_OP_HEADER_INVALID:
+        err_id = ERR_INTERNAL;
+        break;
+    case AFC_E_UNKNOWN_ERROR:
+    default:
+        err_id = KIO::ERR_UNKNOWN;
+        break;
+    }
+
+    if ( false == ret )
+    {
+        _proto->error(err_id, path);
+    }
+    return ret;
+}
+
 QByteArray AfcDevice::get(const QString& path)
 {
     QByteArray data;
@@ -144,7 +224,7 @@ bool AfcDevice::stat( const QString& path, UDSEntry& entry )
 
     afc_error_t ret = afc_get_file_info(_afc, (const char*) path.toLocal8Bit(), &info);
 
-    if ( AFC_E_SUCCESS == ret && NULL != info )
+    if ( checkError(ret, path) && NULL != info )
     {
         rc = true;
         // get file attributes from info list
@@ -156,7 +236,7 @@ bool AfcDevice::stat( const QString& path, UDSEntry& entry )
             }
             else if (!strcmp(info[i], "st_blocks"))
             {
-//                stbuf->st_blocks = atoi(info[i+1]);
+                //                stbuf->st_blocks = atoi(info[i+1]);
             }
             else if (!strcmp(info[i], "st_ifmt"))
             {
@@ -221,7 +301,8 @@ UDSEntryList AfcDevice::listDir(const QString& path)
     UDSEntryList entryList;
 
     char **list = NULL;
-    if ( AFC_E_SUCCESS == afc_read_directory (_afc, (const char*) path.toLocal8Bit(), &list) )
+    afc_error_t ret = afc_read_directory (_afc, (const char*) path.toLocal8Bit(), &list);
+    if ( checkError(ret, path) )
     {        
         char** ptr = list;
         while ( NULL != *ptr )
@@ -248,8 +329,8 @@ UDSEntryList AfcDevice::listDir(const QString& path)
 
 bool AfcDevice::open( const QString& path, QIODevice::OpenMode mode )
 {
-    bool ret = false;
-    afc_file_mode_t file_mode;
+    bool rc = false;
+    afc_file_mode_t file_mode = AFC_FOPEN_RDONLY;
 
     if ( QIODevice::ReadOnly == mode )
     {
@@ -280,11 +361,11 @@ bool AfcDevice::open( const QString& path, QIODevice::OpenMode mode )
         _proto->error(KIO::ERR_COULD_NOT_ACCEPT, "Unsupported mode");
     }
 
-    afc_error_t er = afc_file_open(_afc, (const char*) path.toLocal8Bit(), file_mode, &openFd);
+    afc_error_t ret = afc_file_open(_afc, (const char*) path.toLocal8Bit(), file_mode, &openFd);
 
-    if ( AFC_E_SUCCESS == er )
+    if ( checkError(ret, path) )
     {
-        ret = true;
+        rc = true;
         openPath = path;
         UDSEntry entry;
         stat(path, entry);
@@ -293,7 +374,7 @@ bool AfcDevice::open( const QString& path, QIODevice::OpenMode mode )
         _proto->position( 0 );
 
     }
-    return ret;
+    return rc;
 }
 
 void AfcDevice::read( KIO::filesize_t size )
@@ -306,7 +387,7 @@ void AfcDevice::read( KIO::filesize_t size )
         afc_error_t  err;
         do {
             err = afc_file_read(_afc, openFd, buffer.data(), size, &bytes_read);
-        } while (bytes_read < size && err == AFC_E_SUCCESS);
+        } while (bytes_read < size && checkError(err, openPath));
 
         if (bytes_read > 0) {
             QByteArray array = QByteArray::fromRawData(buffer.data(), bytes_read);
@@ -315,7 +396,7 @@ void AfcDevice::read( KIO::filesize_t size )
         } else {
             // empty array designates eof
             _proto->data(QByteArray());
-            if (bytes_read != 0) {
+            if (err != AFC_E_END_OF_DATA) {
                 _proto->error(KIO::ERR_COULD_NOT_READ, openPath);
                 _proto->close();
             }
@@ -330,24 +411,15 @@ void AfcDevice::write( const QByteArray &data )
     Q_ASSERT( openFd != -1 );
 
     uint32_t bytes_written = 0;
-    afc_error_t er = afc_file_write (_afc, openFd, data.constData(), data.size(), &bytes_written);
+    afc_error_t ret = afc_file_write (_afc, openFd, data.constData(), data.size(), &bytes_written);
 
-    if ( AFC_E_SUCCESS == er)
+    if ( checkError(ret, openPath) )
     {
         _proto->written(data.size());
     }
     else
     {
-        if ( bytes_written < data.size() )
-        {
-            _proto->error(KIO::ERR_DISK_FULL, openPath);
-            _proto->close();
-        }
-        else
-        {
-            _proto->error(KIO::ERR_COULD_NOT_WRITE, openPath);
-            _proto->close();
-        }
+        _proto->close();
     }
 }
 
@@ -355,9 +427,9 @@ void AfcDevice::seek( KIO::filesize_t offset )
 {
     Q_ASSERT(openFd != -1);
 
-    afc_error_t er = afc_file_seek (_afc, openFd, offset, SEEK_SET);
+    afc_error_t ret = afc_file_seek (_afc, openFd, offset, SEEK_SET);
 
-    if ( AFC_E_SUCCESS == er )
+    if ( checkError(ret, openPath) )
     {
         _proto->position( offset );
     }
@@ -372,7 +444,7 @@ void AfcDevice::close()
 {
     Q_ASSERT(openFd != -1);
 
-     afc_file_close (_afc, openFd);
+    afc_file_close (_afc, openFd);
     openFd = -1;
     openPath = "";
 

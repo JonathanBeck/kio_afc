@@ -28,8 +28,9 @@ public:
 
     bool isValid();
 
-
     KIO::UDSEntry getRootUDSEntry();
+
+    bool checkError( afc_error_t error, const QString& path );
 
     QByteArray get(const QString& path);
     bool stat( const QString& path, KIO::UDSEntry& entry );
