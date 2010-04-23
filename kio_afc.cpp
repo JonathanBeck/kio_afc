@@ -157,38 +157,66 @@ AfcPath AfcProtocol::checkURL( const KUrl& url )
 }
 
 
-//void AfcProtocol::get( const KUrl& url )
-//{
-//    kDebug(KIO_AFC) << url;
-//
-//    // check (correct) URL
-//    const AfcPath& path= checkURL(url);
-//
-//    kDebug(KIO_AFC) << "path :" << path;
-//    //root case
-//    if ( path.isRoot() )
-//    {
-//        error(KIO::ERR_IS_DIRECTORY, "/");
-//        return;
-//    }
-//
-//    AfcDevice* dev = _devices[path.m_host];
-//
-//    if ( NULL != dev )
-//    {
-//        data ( dev->get(url.path()) );
-//    }
-//
-//    finished();
-//}
-//
-//
-//
-//void AfcProtocol::put( const KUrl& url, int _mode,
-//                       KIO::JobFlags _flags )
-//{
-//    kDebug(KIO_AFC) << url;
-//}
+void AfcProtocol::get( const KUrl& url )
+{
+    kDebug(KIO_AFC) << url;
+
+    // check (correct) URL
+    const AfcPath& path= checkURL(url);
+
+    kDebug(KIO_AFC) << "path :" << path;
+    //root case
+    if ( path.isRoot() )
+    {
+        error(KIO::ERR_IS_DIRECTORY, "/");
+        return;
+    }
+
+    AfcDevice* dev = _devices[path.m_host];
+
+    if ( NULL != dev )
+    {
+        dev->get(path.m_path);
+    }
+    else
+    {
+        error (KIO::ERR_DOES_NOT_EXIST, path.m_path);
+    }
+
+    finished();
+}
+
+
+
+void AfcProtocol::put( const KUrl& url, int _mode,
+                       KIO::JobFlags _flags )
+{
+    kDebug(KIO_AFC) << url;
+
+    // check (correct) URL
+    const AfcPath& path= checkURL(url);
+
+    kDebug(KIO_AFC) << "path :" << path;
+    //root case
+    if ( path.isRoot() )
+    {
+        error(KIO::ERR_IS_DIRECTORY, "/");
+        return;
+    }
+
+    AfcDevice* dev = _devices[path.m_host];
+
+    if ( NULL != dev )
+    {
+        dev->put(path.m_path, _mode, _flags);
+    }
+    else
+    {
+        error (KIO::ERR_DOES_NOT_EXIST, path.m_path);
+    }
+
+    finished();
+}
 
 void AfcProtocol::copy( const KUrl &src, const KUrl &dest,
                         int mode, KIO::JobFlags flags )

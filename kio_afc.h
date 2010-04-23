@@ -35,10 +35,10 @@ public:
 
   virtual void stat( const KUrl& url );
 
-//  virtual void get( const KUrl& url );
-//
-//  virtual void put( const KUrl& url, int _mode,
-//                    KIO::JobFlags _flags );
+  virtual void get( const KUrl& url );
+
+  virtual void put( const KUrl& url, int _mode,
+                    KIO::JobFlags _flags );
   virtual void copy( const KUrl &src, const KUrl &dest,
                      int mode, KIO::JobFlags flags );
   virtual void rename( const KUrl &src, const KUrl &dest,

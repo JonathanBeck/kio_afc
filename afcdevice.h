@@ -17,6 +17,7 @@
 
 #include <kio/global.h>
 #include <kio/udsentry.h>
+#include <kio/job.h>
 
 class AfcProtocol;
 
@@ -32,7 +33,9 @@ public:
 
     bool checkError( afc_error_t error, const QString& path );
 
-    QByteArray get(const QString& path);
+    void get(const QString& path);
+    void put( const QString& path, int _mode, KIO::JobFlags _flags );
+
     bool stat( const QString& path, KIO::UDSEntry& entry );
     bool open( const QString& path, QIODevice::OpenMode mode );
     void read( KIO::filesize_t size );

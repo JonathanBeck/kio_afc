@@ -186,35 +186,23 @@ bool AfcDevice::checkError( afc_error_t error, const QString& path )
     return ret;
 }
 
-QByteArray AfcDevice::get(const QString& path)
+void AfcDevice::get(const QString& path)
 {
-    QByteArray data;
-    //    int bytes = 0;
-    //    char *buf = NULL;
-    //    afc_error_t err = afc_file_read(afc, openFd, buf, size, &bytes);
-    //
-    //
-    //    QByteArray  filedata;
-    //
-    //    _afc_client = fuse_get_context()->private_data;
-    //
-    //    if (size == 0)
-    //        return 0;
-    //
-    //    afc_error_t err = afc_file_seek(_afc_client, fi->fh, offset, SEEK_SET);
-    //    if (err != AFC_E_SUCCESS) {
-    //    int res = get_afc_error_as_errno(err);
-    //    return -res;
-    //    }
-    //
-    //    err = afc_file_read(afc, fi->fh, buf, size, &bytes);
-    //    if (err != AFC_E_SUCCESS) {
-    //        int res = get_afc_error_as_errno(err);
-    //        return -res;
-    //    }
-    //
-    //    return bytes;
-    return data;
+    UDSEntry entry;
+    if ( stat (path, entry) )
+    {
+        if ( open(path, QIODevice::ReadOnly) )
+        {
+            KIO::filesize_t size = entry.numberValue(UDSEntry::UDS_SIZE);
+            read(size);
+            close();
+        }
+    }
+}
+
+void AfcDevice::put( const QString& path, int _mode, KIO::JobFlags _flags )
+{
+
 }
 
 bool AfcDevice::stat( const QString& path, UDSEntry& entry )
@@ -282,7 +270,6 @@ bool AfcDevice::stat( const QString& path, UDSEntry& entry )
             }
             else if (!strcmp(info[i], "st_mtime"))
             {
-
                 entry.insert( UDSEntry::UDS_TIME, atoll(info[i+1]) / 1000000000 );
             }
             free (info[i]);
