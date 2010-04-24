@@ -39,8 +39,7 @@ public:
 
   virtual void put( const KUrl& url, int _mode,
                     KIO::JobFlags _flags );
-  virtual void copy( const KUrl &src, const KUrl &dest,
-                     int mode, KIO::JobFlags flags );
+
   virtual void rename( const KUrl &src, const KUrl &dest,
                        KIO::JobFlags flags );
   virtual void symlink( const QString &target, const KUrl &dest,

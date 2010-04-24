@@ -230,12 +230,6 @@ void AfcProtocol::put( const KUrl& url, int _mode,
     finished();
 }
 
-void AfcProtocol::copy( const KUrl &src, const KUrl &dest,
-                        int mode, KIO::JobFlags flags )
-{
-    kDebug(KIO_AFC) << src << "to " << dest;
-}
-
 void AfcProtocol::rename( const KUrl &src, const KUrl &dest,
                           KIO::JobFlags flags )
 {
