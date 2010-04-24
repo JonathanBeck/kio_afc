@@ -240,6 +240,36 @@ void AfcProtocol::rename( const KUrl &src, const KUrl &dest,
                           KIO::JobFlags flags )
 {
     kDebug(KIO_AFC) << src << "to " << dest;
+
+    // check (correct) URL
+    const AfcPath path_src = checkURL(src);
+    const AfcPath path_dest = checkURL(dest);
+
+    //make sue we are on the same device
+
+    if ( path_src.m_host == path_dest.m_host )
+    {
+        AfcDevice* device = _devices[path_src.m_host];
+
+        if ( NULL == device )
+        {
+            error(KIO::ERR_DOES_NOT_EXIST, "Could not find specified device");
+            return;
+        }
+
+        KIO::Error err;
+        if ( ! device->rename(path_src.m_path, path_dest.m_path, flags, err ) )
+        {
+            error(err, path_src.m_path);
+            return;
+        }
+    }
+    else
+    {
+        error ( KIO::ERR_CANNOT_RENAME, "Cannot rename on different device");
+        return;
+    }
+    finished();
 }
 
 void AfcProtocol::symlink( const QString &target, const KUrl &dest,

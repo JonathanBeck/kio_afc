@@ -177,7 +177,7 @@ bool AfcDevice::createUDSEntry( const QString & filename, const QString & path, 
             }
             else if (!strcmp(info[i], "st_mtime"))
             {
-                entry.insert( UDSEntry::UDS_TIME, atoll(info[i+1]) / 1000000000 );
+                entry.insert( UDSEntry::UDS_MODIFICATION_TIME, atoll(info[i+1]) / 1000000000 );
             }
             free (info[i]);
         }
@@ -578,5 +578,37 @@ bool AfcDevice::setModificationTime( const QString& path, const QDateTime& mtime
 bool AfcDevice::del( const QString& path, KIO::Error& error)
 {
     afc_error_t er = afc_remove_path ( _afc, (const char*) path.toLocal8Bit() );
+    return checkError(er, error);
+}
+
+bool AfcDevice::rename( const QString& src, const QString& dest, KIO::JobFlags flags, KIO::Error& error )
+{
+    char off_t_should_be_64_bits[sizeof(off_t) >= 8 ? 1 : -1]; (void) off_t_should_be_64_bits;
+
+    //make sure path exists
+    UDSEntry entry_src;
+    if ( !createUDSEntry("", src, entry_src, error) )
+    {
+        return false;
+    }
+
+    UDSEntry entry_dest;
+    if ( createUDSEntry("", dest, entry_dest, error) )
+    {
+        if (S_ISDIR( entry_dest.numberValue(UDSEntry::UDS_FILE_TYPE ) ) )
+        {
+            error = KIO::ERR_DIR_ALREADY_EXIST;
+            return false;
+        }
+
+        if (!(flags & KIO::Overwrite))
+        {
+            error = KIO::ERR_FILE_ALREADY_EXIST;
+            return false;
+        }
+    }
+
+    afc_error_t er = afc_rename_path ( _afc, (const char*) src.toLocal8Bit(), (const char*) dest.toLocal8Bit() );
+
     return checkError(er, error);
 }

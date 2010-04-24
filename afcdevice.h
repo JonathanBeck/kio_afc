@@ -50,6 +50,8 @@ public:
     bool setModificationTime( const QString& path, const QDateTime& mtime, KIO::Error& error );
     bool del( const QString& path, KIO::Error& error);
 
+    bool rename( const QString& src, const QString& dest, KIO::JobFlags flags, KIO::Error& error );
+
 
 private:
     AfcProtocol* _proto;
