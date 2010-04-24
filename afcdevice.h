@@ -35,7 +35,7 @@ public:
     bool checkError( afc_error_t err, KIO::Error& error );
 
     bool get(const QString& path, KIO::Error& error);
-    bool put( const QString& path, int _mode, KIO::JobFlags _flags, KIO::Error& error );
+    bool put( const QString& path, KIO::JobFlags _flags, KIO::Error& error );
 
     bool stat( const QString& filename, const QString& path, KIO::Error& error );
     bool open( const QString& path, QIODevice::OpenMode mode, KIO::Error& error );
@@ -45,6 +45,10 @@ public:
     bool close();
 
     bool listDir(const QString& path, KIO::Error& error );
+
+    bool mkdir( const QString& path, KIO::Error& error );
+    bool setModificationTime( const QString& path, const QDateTime& mtime, KIO::Error& error );
+    bool del( const QString& path, KIO::Error& error);
 
 
 private:

@@ -20,9 +20,11 @@
 
 #include "afcdevice.h"
 #include "kio_afc.h"
+
 #include <kdebug.h>
 
 #include <QtCore/QVarLengthArray>
+#include <QtCore/QDateTime>
 
 
 #define AFC_PROTO "com.apple.afc"
@@ -255,11 +257,16 @@ bool AfcDevice::checkError( afc_error_t error, KIO::Error& err_id )
         err_id = KIO::ERR_UNKNOWN;
         break;
     }
+
+    kDebug(KIO_AFC) << "error: " << err_id << "ret: " << ret;
+
     return ret;
 }
 
 bool AfcDevice::get(const QString& path, KIO::Error& error)
 {
+    kDebug(KIO_AFC) << path;
+
     bool ret = false;
     UDSEntry entry;
     if ( createUDSEntry( "", path, entry, error ) )
@@ -275,9 +282,101 @@ bool AfcDevice::get(const QString& path, KIO::Error& error)
     return ret;
 }
 
-bool AfcDevice::put( const QString& path, int _mode, KIO::JobFlags _flags, KIO::Error& error )
+bool AfcDevice::put( const QString& path, KIO::JobFlags _flags, KIO::Error& error )
 {
+    kDebug(KIO_AFC) << path << _flags;
 
+    UDSEntry entry;
+    const bool bOrigExists = createUDSEntry( "", path, entry, error);
+
+    if ( bOrigExists && !(_flags & KIO::Overwrite) && !(_flags & KIO::Resume))
+    {
+        if ( S_ISDIR ( entry.numberValue(UDSEntry::UDS_FILE_TYPE ) ) )
+            error = KIO::ERR_DIR_ALREADY_EXIST;
+        else
+            error = KIO::ERR_FILE_ALREADY_EXIST;
+        return false;
+    }
+
+    //open file
+    if ( !path.isEmpty() )
+    {
+        if ( bOrigExists && !(_flags & KIO::Resume) )
+        {
+            kDebug(KIO_AFC) << "Deleting destination file" << path;
+            if ( ! del (path, error) )
+                return false;
+        }
+
+        if ( (_flags & KIO::Resume) )
+        {
+            if ( ! open(path, QIODevice::Append, error) )
+                return false;
+
+            if ( ! checkError (afc_file_seek(_afc, openFd, 0, SEEK_END), error ) )
+            {
+                close();
+                return false;
+            }
+        }
+        else
+        {
+            if ( ! open(path, QIODevice::ReadWrite | QIODevice::Truncate, error) )
+                return false;
+        }
+    }
+
+    int result;
+
+    // Loop until we got 0 (end of data)
+    do
+    {
+        QByteArray buffer;
+        _proto->dataReq(); // Request for data
+        result = _proto->readData( buffer );
+
+        if (result >= 0)
+        {
+            if ( ! write( buffer, error) )
+            {
+                result = -1;
+            }
+        }
+    }
+    while ( result > 0 );
+
+    // An error occurred deal with it.
+    if (result < 0)
+    {
+        kDebug(KIO_AFC) << "Error during 'put'. Aborting.";
+
+        if (openFd != (uint64_t)-1)
+        {
+            close();
+        }
+        return false;
+    }
+
+    if ( openFd == (uint64_t)-1 ) // we got nothing to write out, so we never opened the file
+    {
+        return true;
+    }
+
+    close();
+
+    // set modification time
+    const QString mtimeStr = _proto->metaData(QLatin1String("modified"));
+    if ( !mtimeStr.isEmpty() )
+    {
+        QDateTime dt = QDateTime::fromString( mtimeStr, Qt::ISODate );
+        if ( dt.isValid() )
+        {
+            setModificationTime(path, dt, error);
+            //do not trigger error just for time
+        }
+    }
+
+    // We have done our job => finish
     return true;
 }
 
@@ -327,6 +426,8 @@ bool AfcDevice::listDir(const QString& path, KIO::Error& error)
 
 bool AfcDevice::open( const QString& path, QIODevice::OpenMode mode, KIO::Error& error )
 {
+    kDebug(KIO_AFC) << path << "mode: " << mode;
+
     bool ret = false;
     afc_file_mode_t file_mode = AFC_FOPEN_RDONLY;
 
@@ -432,7 +533,7 @@ bool AfcDevice::write( const QByteArray &data, KIO::Error& error )
 bool AfcDevice::seek( KIO::filesize_t offset, KIO::Error& error )
 {
     bool ret = false;
-    Q_ASSERT(openFd != -1);
+    Q_ASSERT( openFd != -1 );
 
     afc_error_t er = afc_file_seek (_afc, openFd, offset, SEEK_SET);
 
@@ -451,10 +552,28 @@ bool AfcDevice::seek( KIO::filesize_t offset, KIO::Error& error )
 
 bool AfcDevice::close()
 {
-    Q_ASSERT(openFd != -1);
+    Q_ASSERT( openFd != -1 );
 
     afc_file_close (_afc, openFd);
     openFd = -1;
     openPath = "";
     return true;
+}
+
+bool AfcDevice::mkdir( const QString& path, KIO::Error& error )
+{
+    afc_error_t er = afc_make_directory ( _afc, (const char*) path.toLocal8Bit() );
+    return checkError(er, error);
+}
+
+bool AfcDevice::setModificationTime( const QString& path, const QDateTime& mtime, KIO::Error& error )
+{
+    afc_error_t er = afc_set_file_time ( _afc, (const char*) path.toLocal8Bit(), mtime.toTime_t() * 1000000000 );
+    return checkError(er, error);
+}
+
+bool AfcDevice::del( const QString& path, KIO::Error& error)
+{
+    afc_error_t er = afc_remove_path ( _afc, (const char*) path.toLocal8Bit() );
+    return checkError(er, error);
 }

@@ -215,7 +215,7 @@ void AfcProtocol::put( const KUrl& url, int _mode,
     if ( NULL != dev )
     {
         KIO::Error err;
-        if ( !dev->put(path.m_path, _mode, _flags, err ) )
+        if ( !dev->put(path.m_path, _flags, err ) )
         {
             error (err, path.m_path);
             return;
@@ -351,16 +351,76 @@ void AfcProtocol::listDir( const KUrl& url )
 void AfcProtocol::mkdir( const KUrl& url, int permissions )
 {
     kDebug(KIO_AFC) << url;
+
+    // check (correct) URL
+    const AfcPath path = checkURL(url);
+
+    AfcDevice* device = _devices[path.m_host];
+
+    if ( NULL == device )
+    {
+        error(KIO::ERR_DOES_NOT_EXIST, "Could not find specified device");
+        return;
+    }
+
+    KIO::Error err;
+    if ( ! device->mkdir(path.m_path, err ) )
+    {
+        error(err, path.m_path);
+        return;
+    }
+
+    finished();
 }
 
 void AfcProtocol::setModificationTime( const KUrl& url, const QDateTime& mtime )
 {
     kDebug(KIO_AFC) << url << " time: " << mtime;
+
+    // check (correct) URL
+    const AfcPath path = checkURL(url);
+
+    AfcDevice* device = _devices[path.m_host];
+
+    if ( NULL == device )
+    {
+        error(KIO::ERR_DOES_NOT_EXIST, "Could not find specified device");
+        return;
+    }
+
+    KIO::Error err;
+    if ( ! device->setModificationTime(path.m_path, mtime, err ) )
+    {
+        error(err, path.m_path);
+        return;
+    }
+
+    finished();
 }
 
 void AfcProtocol::del( const KUrl& url, bool isfile)
 {
     kDebug(KIO_AFC) << url;
+
+    // check (correct) URL
+    const AfcPath path = checkURL(url);
+
+    AfcDevice* device = _devices[path.m_host];
+
+    if ( NULL == device )
+    {
+        error(KIO::ERR_DOES_NOT_EXIST, "Could not find specified device");
+        return;
+    }
+
+    KIO::Error err;
+    if ( ! device->del(path.m_path, err ) )
+    {
+        error(err, path.m_path);
+        return;
+    }
+
+    finished();
 }
 
 void AfcProtocol::open( const KUrl &url, QIODevice::OpenMode mode )
