@@ -583,8 +583,6 @@ bool AfcDevice::del( const QString& path, KIO::Error& error)
 
 bool AfcDevice::rename( const QString& src, const QString& dest, KIO::JobFlags flags, KIO::Error& error )
 {
-    char off_t_should_be_64_bits[sizeof(off_t) >= 8 ? 1 : -1]; (void) off_t_should_be_64_bits;
-
     //make sure path exists
     UDSEntry entry_src;
     if ( !createUDSEntry("", src, entry_src, error) )
@@ -609,6 +607,36 @@ bool AfcDevice::rename( const QString& src, const QString& dest, KIO::JobFlags f
     }
 
     afc_error_t er = afc_rename_path ( _afc, (const char*) src.toLocal8Bit(), (const char*) dest.toLocal8Bit() );
+
+    return checkError(er, error);
+}
+
+bool AfcDevice::symlink( const QString& src, const QString& dest, KIO::JobFlags flags, KIO::Error& error )
+{
+    //make sure path exists
+    UDSEntry entry_src;
+    if ( !createUDSEntry("", src, entry_src, error) )
+    {
+        return false;
+    }
+
+    UDSEntry entry_dest;
+    if ( createUDSEntry("", dest, entry_dest, error) )
+    {
+        if (S_ISDIR( entry_dest.numberValue(UDSEntry::UDS_FILE_TYPE ) ) )
+        {
+            error = KIO::ERR_DIR_ALREADY_EXIST;
+            return false;
+        }
+
+        if (!(flags & KIO::Overwrite))
+        {
+            error = KIO::ERR_FILE_ALREADY_EXIST;
+            return false;
+        }
+    }
+
+    afc_error_t er = afc_make_link ( _afc, AFC_SYMLINK, (const char*) src.toLocal8Bit(), (const char*) dest.toLocal8Bit() );
 
     return checkError(er, error);
 }

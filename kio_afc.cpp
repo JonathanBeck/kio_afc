@@ -276,6 +276,38 @@ void AfcProtocol::symlink( const QString &target, const KUrl &dest,
                            KIO::JobFlags flags )
 {
     kDebug(KIO_AFC) << target << "to " << dest;
+
+    // check (correct) URL
+    const AfcPath path_dest = checkURL(dest);
+
+    //make sue we are on the same device
+
+    if ( target.contains( path_dest.m_host, Qt::CaseSensitive ) )
+    {
+        AfcDevice* device = _devices[path_dest.m_host];
+
+        if ( NULL == device )
+        {
+            error(KIO::ERR_DOES_NOT_EXIST, "Could not find specified device");
+            return;
+        }
+
+        QString src = target;
+        src.remove("/" + path_dest.m_host, Qt::CaseSensitive );
+
+        KIO::Error err;
+        if ( ! device->symlink(src, path_dest.m_path, flags, err ) )
+        {
+            error(err, target);
+            return;
+        }
+    }
+    else
+    {
+        error ( KIO::ERR_CANNOT_SYMLINK, "Cannot symlink on different device");
+        return;
+    }
+    finished();
 }
 
 

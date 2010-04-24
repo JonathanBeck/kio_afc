@@ -51,6 +51,7 @@ public:
     bool del( const QString& path, KIO::Error& error);
 
     bool rename( const QString& src, const QString& dest, KIO::JobFlags flags, KIO::Error& error );
+    bool symlink( const QString& src, const QString& dest, KIO::JobFlags flags, KIO::Error& error );
 
 
 private:
