@@ -104,6 +104,9 @@ bool AfcDevice::createRootUDSEntry( UDSEntry & entry )
     entry.insert( UDSEntry::UDS_NAME, _id );
     entry.insert( UDSEntry::UDS_DISPLAY_NAME, _name );
     entry.insert( UDSEntry::UDS_ICON_NAME, _icon );
+    entry.insert( UDSEntry::UDS_USER, AfcProtocol::m_user );
+    entry.insert( UDSEntry::UDS_GROUP, AfcProtocol::m_group );
+    entry.insert( UDSEntry::UDS_ACCESS, 0755 );
 
     return true;
 }
