@@ -176,11 +176,17 @@ void AfcProtocol::get( const KUrl& url )
 
     if ( NULL != dev )
     {
-        dev->get(path.m_path);
+        KIO::Error err;
+        if ( !dev->get(path.m_path, err) )
+        {
+            error (err, path.m_path);
+            return;
+        }
     }
     else
     {
         error (KIO::ERR_DOES_NOT_EXIST, path.m_path);
+        return;
     }
 
     finished();
@@ -208,11 +214,17 @@ void AfcProtocol::put( const KUrl& url, int _mode,
 
     if ( NULL != dev )
     {
-        dev->put(path.m_path, _mode, _flags);
+        KIO::Error err;
+        if ( !dev->put(path.m_path, _mode, _flags, err ) )
+        {
+            error (err, path.m_path);
+            return;
+        }
     }
     else
     {
         error (KIO::ERR_DOES_NOT_EXIST, path.m_path);
+        return;
     }
 
     finished();
@@ -272,14 +284,13 @@ void AfcProtocol::stat( const KUrl& url )
     }
 
 
-    UDSEntry entry;
-    if ( ! device->stat( path.m_path, entry ) )
+    KIO::Error err;
+    if ( ! device->stat(url.fileName() ,path.m_path, err ) )
     {
         error(KIO::ERR_DOES_NOT_EXIST, path.m_path);
         return;
     }
 
-    statEntry( entry );
     finished();
 }
 
@@ -309,7 +320,9 @@ void AfcProtocol::listDir( const KUrl& url )
         while (i != _devices.constEnd())
         {
             AfcDevice* dev = i.value();
-            listEntry( dev->getRootUDSEntry(), false );
+            UDSEntry entry;
+            dev->createRootUDSEntry(entry);
+            listEntry( entry, false );
             ++i;
         }
 //        }
@@ -325,8 +338,12 @@ void AfcProtocol::listDir( const KUrl& url )
             return;
         }
 
-        UDSEntryList list = device->listDir(path.m_path);
-        listEntries(list);
+        KIO::Error err;
+        if ( !device->listDir(path.m_path, err) )
+        {
+            error ( err, path.m_path );
+            return;
+        }
     }
     finished();
 }
@@ -361,7 +378,13 @@ void AfcProtocol::open( const KUrl &url, QIODevice::OpenMode mode )
         return;
     }
 
-    if ( _opened_device->open(path.m_path, mode) )
+    KIO::Error err;
+    if ( ! _opened_device->open(path.m_path, mode, err ) )
+    {
+        error(err, path.m_path);
+        return;
+    }
+    else
     {
         emit opened();
     }
@@ -370,19 +393,37 @@ void AfcProtocol::open( const KUrl &url, QIODevice::OpenMode mode )
 void AfcProtocol::read( KIO::filesize_t size )
 {
     Q_ASSERT(_opened_device != NULL);
-    _opened_device->read(size);
+
+    KIO::Error err;
+    if ( !_opened_device->read(size,err) )
+    {
+        error (err, "Error while reading");
+        return;
+    }
 }
 
 void AfcProtocol::write( const QByteArray &data )
 {
     Q_ASSERT(_opened_device != NULL);
-    _opened_device->write(data);
+
+    KIO::Error err;
+    if ( !_opened_device->write(data,err) )
+    {
+        error (err, "Error while writing");
+        return;
+    }
 }
 
 void AfcProtocol::seek( KIO::filesize_t offset )
 {
     Q_ASSERT(_opened_device != NULL);
-    _opened_device->seek(offset);
+
+    KIO::Error err;
+    if ( !_opened_device->seek(offset,err) )
+    {
+        error (err, "Error while seeking");
+        return;
+    }
 }
 
 void AfcProtocol::close()
@@ -390,6 +431,7 @@ void AfcProtocol::close()
     Q_ASSERT(_opened_device != NULL);
     _opened_device->close();
     _opened_device = NULL;
+    finished();
 }
 
 

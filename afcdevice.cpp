@@ -96,21 +96,98 @@ bool AfcDevice::isValid()
     return false;
 }
 
-UDSEntry AfcDevice::getRootUDSEntry()
-{
-    UDSEntry udsentry;
-    udsentry.insert( UDSEntry::UDS_NAME, _id );
-    udsentry.insert( UDSEntry::UDS_DISPLAY_NAME, _name );
-    udsentry.insert( UDSEntry::UDS_ICON_NAME, _icon );
 
-    return udsentry;
+bool AfcDevice::createRootUDSEntry( UDSEntry & entry )
+{
+    entry.insert( UDSEntry::UDS_NAME, _id );
+    entry.insert( UDSEntry::UDS_DISPLAY_NAME, _name );
+    entry.insert( UDSEntry::UDS_ICON_NAME, _icon );
+
+    return true;
 }
 
-bool AfcDevice::checkError( afc_error_t error, const QString& path )
+bool AfcDevice::createUDSEntry( const QString & filename, const QString & path, UDSEntry & entry, KIO::Error& error )
+{
+    bool rc = false;
+    char **info = NULL;
+
+    afc_error_t ret = afc_get_file_info(_afc, (const char*) path.toLocal8Bit(), &info);
+
+    if ( checkError(ret, error) && NULL != info )
+    {
+        rc = true;
+        entry.insert(UDSEntry::UDS_NAME, filename);
+        // get file attributes from info list
+        for (int i = 0; info[i]; i += 2)
+        {
+            if (!strcmp(info[i], "st_size"))
+            {
+                entry.insert( UDSEntry::UDS_SIZE, atoll(info[i+1]) );
+            }
+            else if (!strcmp(info[i], "st_blocks"))
+            {
+                // stbuf->st_blocks = atoi(info[i+1]);
+            }
+            else if (!strcmp(info[i], "st_ifmt"))
+            {
+                if (!strcmp(info[i+1], "S_IFREG"))
+                {
+                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFREG );
+                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
+                }
+                else if (!strcmp(info[i+1], "S_IFDIR"))
+                {
+                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFDIR );
+                    entry.insert( UDSEntry::UDS_ACCESS, 0755 );
+                }
+                else if (!strcmp(info[i+1], "S_IFLNK"))
+                {
+                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFLNK );
+                    entry.insert( UDSEntry::UDS_ACCESS, 0777 );
+                }
+                else if (!strcmp(info[i+1], "S_IFBLK"))
+                {
+                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFBLK );
+                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
+                }
+                else if (!strcmp(info[i+1], "S_IFCHR"))
+                {
+                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFCHR );
+                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
+                }
+                else if (!strcmp(info[i+1], "S_IFIFO"))
+                {
+                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFIFO );
+                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
+                }
+                else if (!strcmp(info[i+1], "S_IFSOCK"))
+                {
+                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFSOCK );
+                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
+                }
+            }
+            else if (!strcmp(info[i], "st_nlink"))
+            {
+                entry.insert( UDSEntry::UDS_NUMBER, atoi(info[i+1]));
+            }
+            else if (!strcmp(info[i], "st_mtime"))
+            {
+                entry.insert( UDSEntry::UDS_TIME, atoll(info[i+1]) / 1000000000 );
+            }
+            free (info[i]);
+        }
+        free(info);
+    }
+
+    entry.insert( UDSEntry::UDS_USER, AfcProtocol::m_user );
+    entry.insert( UDSEntry::UDS_GROUP, AfcProtocol::m_group );
+
+    return rc;
+}
+
+bool AfcDevice::checkError( afc_error_t error, KIO::Error& err_id )
 {
     bool ret = false;
-    QString errorMessage = path;
-    int err_id;
 
     switch ( error )
     {
@@ -178,145 +255,79 @@ bool AfcDevice::checkError( afc_error_t error, const QString& path )
         err_id = KIO::ERR_UNKNOWN;
         break;
     }
+    return ret;
+}
 
-    if ( false == ret )
+bool AfcDevice::get(const QString& path, KIO::Error& error)
+{
+    bool ret = false;
+    UDSEntry entry;
+    if ( createUDSEntry( "", path, entry, error ) )
     {
-        _proto->error(err_id, path);
+        if ( open(path, QIODevice::ReadOnly, error) )
+        {
+            KIO::filesize_t size = entry.numberValue(UDSEntry::UDS_SIZE);
+            ret = read(size, error);
+
+            close();
+        }
     }
     return ret;
 }
 
-void AfcDevice::get(const QString& path)
+bool AfcDevice::put( const QString& path, int _mode, KIO::JobFlags _flags, KIO::Error& error )
 {
+
+    return true;
+}
+
+bool AfcDevice::stat( const QString& filename, const QString& path, KIO::Error& error )
+{
+    bool ret = false;
     UDSEntry entry;
-    if ( stat (path, entry) )
+
+    if ( createUDSEntry(filename, path, entry, error ) )
     {
-        if ( open(path, QIODevice::ReadOnly) )
-        {
-            KIO::filesize_t size = entry.numberValue(UDSEntry::UDS_SIZE);
-            read(size);
-            close();
-        }
+        _proto->statEntry(entry);
+        ret = true;
     }
+    return ret;
 }
 
-void AfcDevice::put( const QString& path, int _mode, KIO::JobFlags _flags )
+bool AfcDevice::listDir(const QString& path, KIO::Error& error)
 {
-
-}
-
-bool AfcDevice::stat( const QString& path, UDSEntry& entry )
-{
-    bool rc = false;
-    char **info = NULL;
-
-    afc_error_t ret = afc_get_file_info(_afc, (const char*) path.toLocal8Bit(), &info);
-
-    if ( checkError(ret, path) && NULL != info )
-    {
-        rc = true;
-        // get file attributes from info list
-        for (int i = 0; info[i]; i += 2)
-        {
-            if (!strcmp(info[i], "st_size"))
-            {
-                entry.insert( UDSEntry::UDS_SIZE, atoll(info[i+1]) );
-            }
-            else if (!strcmp(info[i], "st_blocks"))
-            {
-                //                stbuf->st_blocks = atoi(info[i+1]);
-            }
-            else if (!strcmp(info[i], "st_ifmt"))
-            {
-                if (!strcmp(info[i+1], "S_IFREG"))
-                {
-                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFREG );
-                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
-                }
-                else if (!strcmp(info[i+1], "S_IFDIR"))
-                {
-                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFDIR );
-                    entry.insert( UDSEntry::UDS_ACCESS, 0755 );
-                }
-                else if (!strcmp(info[i+1], "S_IFLNK"))
-                {
-                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFLNK );
-                    entry.insert( UDSEntry::UDS_ACCESS, 0777 );
-                }
-                else if (!strcmp(info[i+1], "S_IFBLK"))
-                {
-                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFBLK );
-                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
-                }
-                else if (!strcmp(info[i+1], "S_IFCHR"))
-                {
-                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFCHR );
-                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
-                }
-                else if (!strcmp(info[i+1], "S_IFIFO"))
-                {
-                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFIFO );
-                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
-                }
-                else if (!strcmp(info[i+1], "S_IFSOCK"))
-                {
-                    entry.insert( UDSEntry::UDS_FILE_TYPE, S_IFSOCK );
-                    entry.insert( UDSEntry::UDS_ACCESS, 0644 );
-                }
-            }
-            else if (!strcmp(info[i], "st_nlink"))
-            {
-                entry.insert( UDSEntry::UDS_NUMBER, atoi(info[i+1]));
-            }
-            else if (!strcmp(info[i], "st_mtime"))
-            {
-                entry.insert( UDSEntry::UDS_TIME, atoll(info[i+1]) / 1000000000 );
-            }
-            free (info[i]);
-        }
-        free(info);
-    }
-
-    entry.insert( UDSEntry::UDS_USER, AfcProtocol::m_user );
-    entry.insert( UDSEntry::UDS_GROUP, AfcProtocol::m_group );
-
-    return rc;
-}
-
-UDSEntryList AfcDevice::listDir(const QString& path)
-{
-    UDSEntryList entryList;
+    bool ret = false;
 
     char **list = NULL;
-    afc_error_t ret = afc_read_directory (_afc, (const char*) path.toLocal8Bit(), &list);
-    if ( checkError(ret, path) )
-    {        
+    afc_error_t err = afc_read_directory (_afc, (const char*) path.toLocal8Bit(), &list);
+    if ( checkError(err, error) )
+    {
+        ret = true;
         char** ptr = list;
         while ( NULL != *ptr )
         {
             if ( 0 != QString::compare(*ptr, ".") && 0 != QString::compare(*ptr, "..") )
             {
-                UDSEntry entry;
                 QString subPath = path.compare("/") ? path : "";
                 subPath += "/";
                 subPath += *ptr;
 
-                entry.insert( UDSEntry::UDS_NAME, *ptr);
-
-                if ( stat (subPath, entry) )
-                    entryList.append(entry);
+                UDSEntry entry;
+                ret = createUDSEntry ( *ptr, subPath, entry, error );
+                _proto->listEntry(entry, false);
             }
             free(*ptr);
             ptr++;
         }
         free (list);
+        _proto->listEntry(UDSEntry(), true);
     }
-    return entryList;
+    return ret;
 }
 
-bool AfcDevice::open( const QString& path, QIODevice::OpenMode mode )
+bool AfcDevice::open( const QString& path, QIODevice::OpenMode mode, KIO::Error& error )
 {
-    bool rc = false;
+    bool ret = false;
     afc_file_mode_t file_mode = AFC_FOPEN_RDONLY;
 
     if ( QIODevice::ReadOnly == mode )
@@ -345,27 +356,29 @@ bool AfcDevice::open( const QString& path, QIODevice::OpenMode mode )
     }
     else
     {
-        _proto->error(KIO::ERR_COULD_NOT_ACCEPT, "Unsupported mode");
+        error = KIO::ERR_COULD_NOT_ACCEPT;
+        return false;
     }
 
-    afc_error_t ret = afc_file_open(_afc, (const char*) path.toLocal8Bit(), file_mode, &openFd);
+    afc_error_t err = afc_file_open(_afc, (const char*) path.toLocal8Bit(), file_mode, &openFd);
 
-    if ( checkError(ret, path) )
+    if ( checkError(err, error) )
     {
-        rc = true;
         openPath = path;
         UDSEntry entry;
-        stat(path, entry);
-
-        _proto->totalSize( entry.numberValue(UDSEntry::UDS_SIZE, 0) );
-        _proto->position( 0 );
-
+        if ( createUDSEntry("", path, entry, error) )
+        {
+            ret = true;
+            _proto->totalSize( entry.numberValue(UDSEntry::UDS_SIZE, 0) );
+            _proto->position( 0 );
+        }
     }
-    return rc;
+    return ret;
 }
 
-void AfcDevice::read( KIO::filesize_t size )
+bool AfcDevice::read( KIO::filesize_t size, KIO::Error& error )
 {
+    bool ret = true;
     Q_ASSERT(openFd != -1);
 
     QVarLengthArray<char> buffer(size);
@@ -374,7 +387,7 @@ void AfcDevice::read( KIO::filesize_t size )
         afc_error_t  err;
         do {
             err = afc_file_read(_afc, openFd, buffer.data(), size, &bytes_read);
-        } while (bytes_read < size && checkError(err, openPath));
+        } while (bytes_read < size && checkError(err, error));
 
         if (bytes_read > 0) {
             QByteArray array = QByteArray::fromRawData(buffer.data(), bytes_read);
@@ -383,57 +396,65 @@ void AfcDevice::read( KIO::filesize_t size )
         } else {
             // empty array designates eof
             _proto->data(QByteArray());
-            if (err != AFC_E_END_OF_DATA) {
-                _proto->error(KIO::ERR_COULD_NOT_READ, openPath);
+            if (err != AFC_E_END_OF_DATA)
+            {
+                ret = false;
+                error = KIO::ERR_COULD_NOT_READ;
                 _proto->close();
             }
             break;
         }
         if (size <= 0) break;
     }
+    return ret;
 }
 
-void AfcDevice::write( const QByteArray &data )
+bool AfcDevice::write( const QByteArray &data, KIO::Error& error )
 {
+    bool ret = false;
     Q_ASSERT( openFd != -1 );
 
     uint32_t bytes_written = 0;
-    afc_error_t ret = afc_file_write (_afc, openFd, data.constData(), data.size(), &bytes_written);
+    afc_error_t err = afc_file_write (_afc, openFd, data.constData(), data.size(), &bytes_written);
 
-    if ( checkError(ret, openPath) )
+    if ( checkError(err, error) )
     {
+        ret = true;
         _proto->written(data.size());
     }
     else
     {
         _proto->close();
     }
+    return ret;
 }
 
-void AfcDevice::seek( KIO::filesize_t offset )
+bool AfcDevice::seek( KIO::filesize_t offset, KIO::Error& error )
 {
+    bool ret = false;
     Q_ASSERT(openFd != -1);
 
-    afc_error_t ret = afc_file_seek (_afc, openFd, offset, SEEK_SET);
+    afc_error_t er = afc_file_seek (_afc, openFd, offset, SEEK_SET);
 
-    if ( checkError(ret, openPath) )
+    if ( checkError(er, error) )
     {
+        ret = true;
         _proto->position( offset );
     }
     else
     {
-        _proto->error(KIO::ERR_COULD_NOT_SEEK, openPath);
+        error = KIO::ERR_COULD_NOT_SEEK;
         _proto->close();
     }
+    return ret;
 }
 
-void AfcDevice::close()
+bool AfcDevice::close()
 {
     Q_ASSERT(openFd != -1);
 
     afc_file_close (_afc, openFd);
     openFd = -1;
     openPath = "";
-
-    _proto->finished();
+    return true;
 }

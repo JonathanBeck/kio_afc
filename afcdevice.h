@@ -29,21 +29,22 @@ public:
 
     bool isValid();
 
-    KIO::UDSEntry getRootUDSEntry();
+    bool createRootUDSEntry( KIO::UDSEntry & entry );
+    bool createUDSEntry( const QString & filename, const QString & path, KIO::UDSEntry & entry, KIO::Error& error );
 
-    bool checkError( afc_error_t error, const QString& path );
+    bool checkError( afc_error_t err, KIO::Error& error );
 
-    void get(const QString& path);
-    void put( const QString& path, int _mode, KIO::JobFlags _flags );
+    bool get(const QString& path, KIO::Error& error);
+    bool put( const QString& path, int _mode, KIO::JobFlags _flags, KIO::Error& error );
 
-    bool stat( const QString& path, KIO::UDSEntry& entry );
-    bool open( const QString& path, QIODevice::OpenMode mode );
-    void read( KIO::filesize_t size );
-    void write( const QByteArray &data );
-    void seek( KIO::filesize_t offset );
-    void close();
+    bool stat( const QString& filename, const QString& path, KIO::Error& error );
+    bool open( const QString& path, QIODevice::OpenMode mode, KIO::Error& error );
+    bool read( KIO::filesize_t size, KIO::Error& error );
+    bool write( const QByteArray &data, KIO::Error& error );
+    bool seek( KIO::filesize_t offset, KIO::Error& error );
+    bool close();
 
-    KIO::UDSEntryList listDir(const QString& path);
+    bool listDir(const QString& path, KIO::Error& error );
 
 
 private:
